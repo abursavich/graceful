@@ -24,10 +24,10 @@ type Server interface {
 	// an error if the listener is closed by the GracefulShutown method.
 	Serve(net.Listener) error
 
-	// GracefulShutdown immediately closes the server's listener and, if possible,
-	// signals to clients that it is going away. It waits for pending requests to
-	// finish or until the context is closed. If all pending requests finish, no
-	// error is returned.
+	// GracefulShutdown immediately closes the server's listener and signals to
+	// clients as necessary that it is going away. It waits for pending requests
+	// to finish or until the context is closed. If all pending requests finish,
+	// no error is returned.
 	GracefulShutdown(context.Context) error
 }
 
@@ -60,18 +60,15 @@ type ServerConfig struct {
 	Server Server
 
 	// ShutdownDelay gives time for load balancers to remove the server from
-	// their backend pools before it stops listening. It's inserted after a
-	// shutdown signal is received and before GracefulShutdown is called on
-	// the servers.
+	// their backend pools after a shutdown signal is received and before it
+	// stops listening.
 	ShutdownDelay time.Duration
 
-	// ShutdownGrace gives time for pending requests complete before the server
-	// must forcibly shut down. It's the timeout on the context passed to
-	// GracefulShutdown.
+	// ShutdownGrace gives time for pending requests to complete before the
+	// server forcibly shuts down.
 	ShutdownGrace time.Duration
 
-	// Logger optionally specifies a logger which will be used to output info
-	// and errors.
+	// Logger optionally adds the ability to log messages, both errors and not.
 	Logger logr.Logger
 
 	initOnce sync.Once
@@ -100,8 +97,8 @@ func (cfg *ServerConfig) ListenAndServe(ctx context.Context, addr string) error 
 }
 
 // Serve serves with the given listener. It waits for shutdown signals with the
-// given context and calls GracefulShutdown as configured. If the context is cancelled
-// a hard shutdown is initiated.
+// given context and calls GracefulShutdown as configured. If the context is
+// cancelled a hard shutdown is initiated.
 func (cfg *ServerConfig) Serve(ctx context.Context, lis net.Listener) error {
 	cfg.init()
 
@@ -129,31 +126,28 @@ func (cfg *ServerConfig) Serve(ctx context.Context, lis net.Listener) error {
 	return g.Wait()
 }
 
-// DualServerConfig specifies a server with functions split between
-// internal and external use cases and graceful shutdown parameters.
+// DualServerConfig specifies a server split between internal and external
+// clients with graceful shutdown parameters.
 type DualServerConfig struct {
 	_ struct{}
 
-	// ExternalServer is the server for the primary clients.
+	// ExternalServer is the server for primary clients.
 	ExternalServer Server
 
 	// InternalServer is the server for health checks, metrics, debugging,
-	// profiling, etc. It shuts down after the ExternalServer exits.
+	// profiling, etc. It shuts down after the ExternalServer.
 	InternalServer Server
 
 	// ShutdownDelay gives time for load balancers to remove the server from
-	// their backend pools before it stops listening. It's inserted after a
-	// shutdown signal is received and before GracefulShutdown is called on
-	// the servers.
+	// their backend pools after a shutdown signal is received and before it
+	// stops listening.
 	ShutdownDelay time.Duration
 
-	// ShutdownGrace gives time for pending requests complete before the server
-	// must forcibly shut down. It's the timeout on the context passed to
-	// GracefulShutdown.
+	// ShutdownGrace gives time for pending requests to complete before the
+	// server forcibly shuts down.
 	ShutdownGrace time.Duration
 
-	// Logger optionally specifies a logger which will be used to output info
-	// and errors.
+	// Logger optionally adds the ability to log messages, both errors and not.
 	Logger logr.Logger
 
 	initOnce sync.Once

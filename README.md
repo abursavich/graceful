@@ -15,28 +15,28 @@ Package graceful provides graceful shutdown for servers.
 // internal and external use cases and graceful shutdown parameters.
 srv := graceful.DualServerConfig{
 	// ExternalServer is the server for the primary clients.
-    ExternalServer: graceful.HTTPServer(&http.Server{
-        Handler: extMux,
-    }),
+	ExternalServer: graceful.HTTPServer(&http.Server{
+		Handler: extMux,
+	}),
 	// InternalServer is the server for health checks, metrics, debugging,
 	// profiling, etc. It shuts down after the ExternalServer exits.
-    InternalServer: graceful.HTTPServer(&http.Server{
-        Handler: intMux,
-    }),
+	InternalServer: graceful.HTTPServer(&http.Server{
+		Handler: intMux,
+	}),
 	// ShutdownDelay gives time for load balancers to remove the server from
 	// their backend pools before it stops listening. It's inserted after a
 	// shutdown signal is received and before GracefulShutdown is called on
 	// the servers.
-    ShutdownDelay: 10 * time.Second,
+	ShutdownDelay: 10 * time.Second,
 	// ShutdownGrace gives time for pending requests complete before the server
 	// must forcibly shut down. It's the timeout on the context passed to
 	// GracefulShutdown.
-    ShutdownGrace: 30 * time.Second,
+	ShutdownGrace: 30 * time.Second,
 	// Logger optionally specifies a logger which will be used to output info
-    // and errors.
-    Logger: log,
+	// and errors.
+	Logger: log,
 }
 if err := srv.ListenAndServe(ctx, *intAddr, *extAddr); err != nil {
-    log.Error(err, "Serving failed")
+	log.Error(err, "Serving failed")
 }
 ```

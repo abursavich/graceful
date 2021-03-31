@@ -33,6 +33,17 @@ srv := graceful.DualServerConfig{
 	// Logger optionally adds the ability to log messages, both errors and not.
 	Logger: log,
 }
+intMux.HandleFunc("/health/alive", func(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+})
+intMux.HandleFunc("/health/ready", func(w http.ResponseWriter, _ *http.Request) {
+	select {
+		case <-srv.ShuttingDown():
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			w.WriteHeader(http.StatusOK)
+	}
+})
 if err := srv.ListenAndServe(ctx, *intAddr, *extAddr); err != nil {
 	log.Error(err, "Serving failed")
 }

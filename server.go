@@ -71,7 +71,9 @@ type ServerConfig struct {
 	// Logger optionally adds the ability to log messages, both errors and not.
 	Logger logr.Logger
 
-	initOnce sync.Once
+	initOnce   sync.Once
+	warnCtx    context.Context
+	warnCancel context.CancelFunc
 }
 
 func (cfg *ServerConfig) init() {
@@ -79,12 +81,21 @@ func (cfg *ServerConfig) init() {
 		if cfg.Logger == nil {
 			cfg.Logger = logr.Discard()
 		}
+		cfg.warnCtx, cfg.warnCancel = context.WithCancel(context.TODO())
 	})
+}
+
+// ShuttingDown returns a channel that is closed when the server encounters
+// an error or it receives its first signal to begin shutting down.
+func (cfg *ServerConfig) ShuttingDown() <-chan struct{} {
+	cfg.init()
+	return cfg.warnCtx.Done()
 }
 
 // ListenAndServe listens on the given address and calls Serve.
 func (cfg *ServerConfig) ListenAndServe(ctx context.Context, addr string) error {
 	cfg.init()
+	defer cfg.warnCancel()
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -101,9 +112,10 @@ func (cfg *ServerConfig) ListenAndServe(ctx context.Context, addr string) error 
 // cancelled a hard shutdown is initiated.
 func (cfg *ServerConfig) Serve(ctx context.Context, lis net.Listener) error {
 	cfg.init()
+	defer cfg.warnCancel()
 
 	g, ctx := errgroup.WithContext(ctx)
-	softCtx, hardCtx := Contexts(ctx, cfg.Logger, cfg.ShutdownDelay, cfg.ShutdownGrace)
+	warnCtx, softCtx, hardCtx := Contexts(ctx, cfg.Logger, cfg.ShutdownDelay, cfg.ShutdownGrace)
 	// Serve.
 	g.Go(func() error {
 		defer lis.Close()
@@ -111,6 +123,12 @@ func (cfg *ServerConfig) Serve(ctx context.Context, lis net.Listener) error {
 			cfg.Logger.Error(err, "Server failed")
 			return err
 		}
+		return nil
+	})
+	// Signal shutting down.
+	g.Go(func() error {
+		<-warnCtx.Done()
+		cfg.warnCancel()
 		return nil
 	})
 	// Watch for shutdown signal.
@@ -150,7 +168,9 @@ type DualServerConfig struct {
 	// Logger optionally adds the ability to log messages, both errors and not.
 	Logger logr.Logger
 
-	initOnce sync.Once
+	initOnce   sync.Once
+	warnCtx    context.Context
+	warnCancel context.CancelFunc
 }
 
 func (cfg *DualServerConfig) init() {
@@ -158,12 +178,21 @@ func (cfg *DualServerConfig) init() {
 		if cfg.Logger == nil {
 			cfg.Logger = logr.Discard()
 		}
+		cfg.warnCtx, cfg.warnCancel = context.WithCancel(context.TODO())
 	})
+}
+
+// ShuttingDown returns a channel that is closed when the server encounters
+// an error or it receives its first signal to begin shutting down.
+func (cfg *DualServerConfig) ShuttingDown() <-chan struct{} {
+	cfg.init()
+	return cfg.warnCtx.Done()
 }
 
 // ListenAndServe listens on the given addresses and calls Serve.
 func (cfg *DualServerConfig) ListenAndServe(ctx context.Context, intAddr, extAddr string) error {
 	cfg.init()
+	defer cfg.warnCancel()
 
 	intLis, err := net.Listen("tcp", intAddr)
 	if err != nil {
@@ -188,12 +217,13 @@ func (cfg *DualServerConfig) ListenAndServe(ctx context.Context, intAddr, extAdd
 // a hard shutdown is initiated.
 func (cfg *DualServerConfig) Serve(ctx context.Context, intLis, extLis net.Listener) error {
 	cfg.init()
+	defer cfg.warnCancel()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	g, ctx := errgroup.WithContext(ctx)
-	softCtx, hardCtx := Contexts(ctx, cfg.Logger, cfg.ShutdownDelay, cfg.ShutdownGrace)
+	warnCtx, softCtx, hardCtx := Contexts(ctx, cfg.Logger, cfg.ShutdownDelay, cfg.ShutdownGrace)
 	extShutdownDone := make(chan struct{})
 
 	// Serve internal.
@@ -212,6 +242,12 @@ func (cfg *DualServerConfig) Serve(ctx context.Context, intLis, extLis net.Liste
 			cfg.Logger.Error(err, "External server failed")
 			return err
 		}
+		return nil
+	})
+	// Signal shutting down.
+	g.Go(func() error {
+		<-warnCtx.Done()
+		cfg.warnCancel()
 		return nil
 	})
 	// Watch for signal and shutdown external first.

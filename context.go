@@ -16,19 +16,23 @@ import (
 	"github.com/go-logr/logr"
 )
 
-// Contexts returns two contexts which respectively serve as soft and hard
-// shutdown signals. They are cancelled after TERM or INT signals are received.
+// Contexts returns three contexts which respectively serve as warning, soft,
+// and hard shutdown signals. They are cancelled after TERM or INT signals are
+// received.
 //
-// If delay is positive, it will wait that duration after receiving a signal
-// before cancelling the first context. This is useful to allow loadbalancer
-// updates before the server stops accepting new requests.
+// When a shutdown signal is received, the warning context is cancelled. This is
+// useful to start failing health checks while other traffic is still served.
 //
-// If grace is positive, it will wait that duration after cancelling the first
-// context before cancelling the second context. This is useful to set a maximum
-// time to allow pending requests to complete.
+// If delay is positive, the soft context will be cancelled after that duration.
+// This is useful to allow loadbalancer updates before the server stops accepting
+// new requests.
+//
+// If grace is positive, the hard context will be cancelled that duration after
+// the soft context is cancelled. This is useful to set a maximum time to allow
+// pending requests to complete.
 //
 // Repeated TERM or INT signals will bypass any delay or grace time.
-func Contexts(ctx context.Context, log logr.Logger, delay, grace time.Duration) (context.Context, context.Context) {
+func Contexts(ctx context.Context, log logr.Logger, delay, grace time.Duration) (warn, soft, hard context.Context) {
 	if log == nil {
 		log = logr.Discard()
 	}
@@ -36,6 +40,7 @@ func Contexts(ctx context.Context, log logr.Logger, delay, grace time.Duration) 
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	hardCtx, hardCancel := context.WithCancel(ctx)
 	softCtx, softCancel := context.WithCancel(hardCtx)
+	warnCtx, warnCancel := context.WithCancel(softCtx)
 	go func() {
 		defer signal.Stop(sigCh)
 		defer hardCancel()
@@ -47,6 +52,7 @@ func Contexts(ctx context.Context, log logr.Logger, delay, grace time.Duration) 
 		}
 		if delay > 0 {
 			log.Info("Shutdown starting after delay period", "duration", delay)
+			warnCancel()
 			select {
 			case <-time.After(delay):
 				log.Info("Shutdown delay period ended")
@@ -69,5 +75,5 @@ func Contexts(ctx context.Context, log logr.Logger, delay, grace time.Duration) 
 			}
 		}
 	}()
-	return softCtx, hardCtx
+	return warnCtx, softCtx, hardCtx
 }

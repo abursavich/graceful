@@ -38,10 +38,10 @@ intMux.HandleFunc("/health/alive", func(w http.ResponseWriter, _ *http.Request) 
 })
 intMux.HandleFunc("/health/ready", func(w http.ResponseWriter, _ *http.Request) {
 	select {
-		case <-srv.ShuttingDown():
-			w.WriteHeader(http.StatusServiceUnavailable)
-		default:
-			w.WriteHeader(http.StatusOK)
+	case <-srv.ShuttingDown():
+		w.WriteHeader(http.StatusServiceUnavailable)
+	default:
+		w.WriteHeader(http.StatusOK)
 	}
 })
 if err := srv.ListenAndServe(ctx, *intAddr, *extAddr); err != nil {

@@ -1,8 +1,8 @@
 module bursavich.dev/graceful
 
-go 1.16
+go 1.17
 
 require (
-	github.com/go-logr/logr v0.3.0
-	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
+	github.com/go-logr/logr v1.1.0
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )

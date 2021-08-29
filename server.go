@@ -78,9 +78,7 @@ type ServerConfig struct {
 
 func (cfg *ServerConfig) init() {
 	cfg.initOnce.Do(func() {
-		if cfg.Logger == nil {
-			cfg.Logger = logr.Discard()
-		}
+		cfg.Logger = loggerOrDiscard(cfg.Logger)
 		cfg.warnCtx, cfg.warnCancel = context.WithCancel(context.TODO())
 	})
 }
@@ -175,9 +173,7 @@ type DualServerConfig struct {
 
 func (cfg *DualServerConfig) init() {
 	cfg.initOnce.Do(func() {
-		if cfg.Logger == nil {
-			cfg.Logger = logr.Discard()
-		}
+		cfg.Logger = loggerOrDiscard(cfg.Logger)
 		cfg.warnCtx, cfg.warnCancel = context.WithCancel(context.TODO())
 	})
 }
@@ -271,4 +267,11 @@ func (cfg *DualServerConfig) Serve(ctx context.Context, intLis, extLis net.Liste
 	})
 	// Wait for shutdown.
 	return g.Wait()
+}
+
+func loggerOrDiscard(log logr.Logger) logr.Logger {
+	if log.GetSink() == nil {
+		return logr.Discard()
+	}
+	return log
 }

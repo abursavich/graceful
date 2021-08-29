@@ -33,9 +33,6 @@ import (
 //
 // Repeated TERM or INT signals will bypass any delay or grace time.
 func Contexts(ctx context.Context, log logr.Logger, delay, grace time.Duration) (warn, soft, hard context.Context) {
-	if log == nil {
-		log = logr.Discard()
-	}
 	sigCh := make(chan os.Signal, 3)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	hardCtx, hardCancel := context.WithCancel(ctx)

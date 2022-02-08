@@ -31,8 +31,8 @@ type Server interface {
 	GracefulShutdown(context.Context) error
 }
 
-// HTTPServer converts an http.Server into a graceful.Server.
-func HTTPServer(srv *http.Server) Server {
+// FromHTTP converts an http.Server into a graceful.Server.
+func FromHTTP(srv *http.Server) Server {
 	return (*httpServer)(srv)
 }
 

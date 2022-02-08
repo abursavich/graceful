@@ -15,12 +15,12 @@ Package graceful provides graceful shutdown for servers.
 // clients with graceful shutdown parameters.
 srv := graceful.DualServerConfig{
 	// ExternalServer is the server for primary clients.
-	ExternalServer: graceful.HTTPServer(&http.Server{
+	ExternalServer: graceful.FromHTTP(&http.Server{
 		Handler: extMux,
 	}),
 	// InternalServer is the server for health checks, metrics, debugging,
 	// profiling, etc. It shuts down after the ExternalServer exits.
-	InternalServer: graceful.HTTPServer(&http.Server{
+	InternalServer: graceful.FromHTTP(&http.Server{
 		Handler: intMux,
 	}),
 	// ShutdownDelay gives time for load balancers to remove the server from

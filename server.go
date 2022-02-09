@@ -52,6 +52,69 @@ func (s *httpServer) GracefulShutdown(ctx context.Context) error {
 	return srv.Shutdown(ctx)
 }
 
+// A GRPCServer is an interface for a grpc.Server.
+type GRPCServer interface {
+	Serve(net.Listener) error
+	GracefulStop()
+	Stop()
+}
+
+// FromGRPC converts a grpc.Server into a graceful.Server.
+func FromGRPC(srv GRPCServer) Server {
+	return &grpcServer{
+		srv:   srv,
+		errCh: make(chan error),
+		done:  make(chan struct{}),
+	}
+}
+
+type grpcServer struct {
+	srv GRPCServer
+
+	once  sync.Once
+	errCh chan error
+	done  chan struct{}
+	err   error
+}
+
+func (s *grpcServer) Serve(lis net.Listener) error {
+	return s.srv.Serve(lis)
+}
+
+func (s *grpcServer) GracefulShutdown(ctx context.Context) error {
+	s.once.Do(func() { go s.shutdown() })
+	select {
+	case <-s.done:
+		return s.err
+	case <-ctx.Done():
+	}
+	select {
+	case <-s.done:
+		return s.err
+	case s.errCh <- ctx.Err():
+	}
+	<-s.done
+	return s.err
+}
+
+func (s *grpcServer) shutdown() {
+	defer close(s.done)
+
+	done := make(chan struct{})
+	go func() {
+		s.srv.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return
+	case err := <-s.errCh:
+		s.err = err
+		s.srv.Stop()
+		<-done
+	}
+}
+
 // ServerConfig specifies a server with graceful shutdown parameters.
 type ServerConfig struct {
 	_ struct{}

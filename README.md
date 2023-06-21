@@ -11,40 +11,67 @@ Package graceful provides graceful shutdown for servers.
 ### Dual HTTP Server
 
 ```go
-// DualServerConfig specifies a server split between internal and external
-// clients with graceful shutdown parameters.
-srv := graceful.DualServerConfig{
-	// ExternalServer is the server for primary clients.
-	ExternalServer: graceful.FromHTTP(&http.Server{
-		Handler: extMux,
-	}),
-	// InternalServer is the server for health checks, metrics, debugging,
-	// profiling, etc. It shuts down after the ExternalServer exits.
-	InternalServer: graceful.FromHTTP(&http.Server{
-		Handler: intMux,
-	}),
-	// ShutdownDelay gives time for load balancers to remove the server from
-	// their backend pools after a shutdown signal is received and before it
-	// stops listening.
-	ShutdownDelay: 10 * time.Second,
-	// ShutdownGrace gives time for pending requests to complete before the
-	// server forcibly shuts down.
-	ShutdownGrace: 30 * time.Second,
-	// Logger optionally adds the ability to log messages, both errors and not.
-	Logger: log,
-}
-intMux.HandleFunc("/health/alive", func(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
+goingAway := make(chan struct{})
+debugMux.HandleFunc("/health/alive", func(w http.ResponseWriter, _ *http.Request) {
+	writeHTTPStatus(w, http.StatusOK)
 })
-intMux.HandleFunc("/health/ready", func(w http.ResponseWriter, _ *http.Request) {
+debugMux.HandleFunc("/health/ready", func(w http.ResponseWriter, _ *http.Request) {
 	select {
-	case <-srv.ShuttingDown():
-		w.WriteHeader(http.StatusServiceUnavailable)
+	case <-goingAway:
+		writeHTTPStatus(w, http.StatusServiceUnavailable)
 	default:
-		w.WriteHeader(http.StatusOK)
+		writeHTTPStatus(w, http.StatusOK)
 	}
 })
-if err := srv.ListenAndServe(ctx, *intAddr, *extAddr); err != nil {
-	log.Error(err, "Serving failed")
+debugSrv := &http.Server{
+	Handler: debugMux,
+	// ...
 }
+debugLis, err := net.Listen("tcp", cfg.DebugAddress)
+if err != nil {
+	log.Error(err, "Debug HTTP server failed to listen", "addr", cfg.DebugAddress)
+	return err
+}
+defer debugLis.Close()
+log.Info("Debug HTTP server listening", "addr", debugLis.Addr())
+
+mainSrv := &http.Server{
+	// ...
+}
+mainLis, err := net.Listen("tcp", cfg.HTTPAddress)
+if err != nil {
+	log.Error(err, "Main HTTP server failed to listen", "addr", cfg.HTTPAddress)
+	return err
+}
+defer mainLis.Close()
+log.Info("Main HTTP server listening", "addr", mainLis.Addr())
+
+// An OrderedGroup is a composition of Processes. All processes in the group are
+// started concurrently but they're stopped serially. In this case, the debug HTTP
+// server keeps serving until after the main HTTP server shuts down.
+processGroup := graceful.OrderedGroup{
+	graceful.HTTPServerProcess(mainSrv, mainLis),
+	graceful.HTTPServerProcess(debugSrv, debugLis),
+}
+options := graceful.Options{
+	// Logger is used to write info logs about shutdown signals
+	// and error logs about failed processes.
+	graceful.WithLogger(log),
+	// Delay gives time for clients and load balancers to remove the server from
+	// their backend pools after a shutdown signal is received and before the
+	// server stops listening.
+	graceful.WithDelay(cfg.ShutdownDelay),
+	// Grace gives time for pending requests to finish before the server
+	// forcibly exits.
+	graceful.WithGrace(cfg.ShutdownGrace),
+	// NotifyFuncs are called as soon as the shutdown signal is received, before
+	// the shutdown delay. It gives the server time to pre-emptively fail
+	// healthchecks and notify clients that it will be going away.
+	graceful.WithNotifyFunc(func() { close(goingAway) }),
+}
+if err := graceful.Run(ctx, processGroup, options...); err != nil {
+	log.Error(err, "Serving with graceful shutdown failed")
+	return err
+}
+return nil
 ```

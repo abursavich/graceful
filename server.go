@@ -14,8 +14,8 @@ import (
 	"sync"
 )
 
-// HTTPServerProcess converts an http.Server and net.Listener into a graceful.Process.
-func HTTPServerProcess(srv *http.Server, lis net.Listener) Process {
+// HTTPServerProcess converts a net.Listener and http.Server into a graceful.Process.
+func HTTPServerProcess(lis net.Listener, srv *http.Server) Process {
 	return &httpServer{srv, lis}
 }
 
@@ -53,8 +53,8 @@ type grpcServer struct {
 	err   error
 }
 
-// GRPCServerProcess converts a grpc.Server and its net.Listener into a graceful.Process.
-func GRPCServerProcess(srv GRPCServer, lis net.Listener) Process {
+// GRPCServerProcess converts a net.Listener and grpc.Server into a graceful.Process.
+func GRPCServerProcess(lis net.Listener, srv GRPCServer) Process {
 	return &grpcServer{
 		srv:   srv,
 		lis:   lis,

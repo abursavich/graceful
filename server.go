@@ -4,7 +4,7 @@
 // Use of this source code is governed by The MIT License
 // which can be found in the LICENSE file.
 
-// Package graceful runs processes with graceful shutdown.
+// Package graceful runs processes, such as servers, with graceful shutdown.
 package graceful
 
 import (

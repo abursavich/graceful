@@ -24,6 +24,7 @@ const (
 // an error before Shutdown was called.
 var ErrUnexpectedEnd = errors.New("graceful: process ended unexpectedly")
 
+// A Process is a unit of execution that runs indefinitely until it's signaled to stop.
 type Process interface {
 	// Run starts the process with the given context and waits until it's stopped.
 	// It returns an error if the process cannot be started or fails unexpectedly.
@@ -32,8 +33,7 @@ type Process interface {
 
 	// Shutdown stops the process with the given context.
 	// It stops accepting new work and waits for any pending work to finish.
-	// If the context is cancelled, it abandons any pending work.
-	// It does not return an error if all pending work is successfully finished.
+	// If the context is cancelled, it abandons any pending work and returns an error.
 	Shutdown(context.Context) error
 }
 
@@ -137,7 +137,7 @@ func WithGrace(grace time.Duration) Option {
 // of those that will be called when the shutdown process is initially triggered.
 // It will be called before the shutdown delay.
 //
-// For a server, this gives it time to pre-emptively fail healthchecks or notify
+// For a server, this gives it time to pre-emptively fail health checks or notify
 // clients that it will be going away.
 func WithNotifyFunc(notify func()) Option {
 	return optionFunc(func(c *config) error {

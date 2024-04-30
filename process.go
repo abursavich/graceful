@@ -161,20 +161,17 @@ func Run(ctx context.Context, process Process, options ...Option) error {
 		}
 	}
 
-	stopping := make(chan struct{})
-	stopped := make(chan struct{})
-
 	g, ctx := errgroup.WithContext(ctx)
 	warnCtx, softCtx, hardCtx := Contexts(ctx, cfg.log, cfg.delay, cfg.grace)
 	// Run the process.
+	// NOTE: Returning an error will close the context and trigger shutdown steps.
 	g.Go(func() error {
-		defer close(stopped)
 		if err := process.Run(hardCtx); err != nil {
 			cfg.log.Error(err, "Process failed")
 			return err
 		}
 		select {
-		case <-stopping:
+		case <-softCtx.Done():
 			return nil
 		default:
 			cfg.log.Info("Process exited without being stopped")
@@ -190,7 +187,6 @@ func Run(ctx context.Context, process Process, options ...Option) error {
 		}
 		// Shutdown the process.
 		<-softCtx.Done()
-		close(stopping)
 		if err := process.Shutdown(hardCtx); err != nil {
 			cfg.log.Error(err, "Process shutdown failed")
 			return err

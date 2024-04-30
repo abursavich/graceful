@@ -9,6 +9,7 @@ package graceful
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -195,4 +196,47 @@ func Run(ctx context.Context, process Process, options ...Option) error {
 	})
 	// Wait for shutdown.
 	return g.Wait()
+}
+
+type funcProcess struct {
+	fn func(context.Context) error
+
+	closeStopping sync.Once
+	stopping      chan struct{}
+
+	closeStopped sync.Once
+	stopped      chan struct{}
+}
+
+// FuncProcess converts a function into a graceful.Process.
+// When the context is cancelled, fn should return a nil error.
+func FuncProcess(fn func(context.Context) error) Process {
+	return &funcProcess{
+		fn:       fn,
+		stopping: make(chan struct{}),
+		stopped:  make(chan struct{}),
+	}
+}
+
+func (f *funcProcess) Run(ctx context.Context) error {
+	defer f.closeStopped.Do(func() { close(f.stopped) })
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		select {
+		case <-f.stopping:
+		case <-f.stopped:
+		}
+		cancel()
+	}()
+	return f.fn(ctx)
+}
+
+func (f *funcProcess) Shutdown(ctx context.Context) error {
+	f.closeStopping.Do(func() { close(f.stopping) })
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-f.stopped:
+		return nil
+	}
 }

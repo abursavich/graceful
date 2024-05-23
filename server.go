@@ -25,6 +25,15 @@ type httpServer struct {
 }
 
 func (s *httpServer) Run(ctx context.Context) error {
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			_ = s.srv.Close()
+		}
+	}()
 	if err := s.srv.Serve(s.lis); err != http.ErrServerClosed {
 		return err
 	}
@@ -64,6 +73,15 @@ func GRPCServerProcess(lis net.Listener, srv GRPCServer) Process {
 }
 
 func (s *grpcServer) Run(ctx context.Context) error {
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			_ = s.Shutdown(ctx)
+		}
+	}()
 	return s.srv.Serve(s.lis)
 }
 

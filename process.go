@@ -43,7 +43,7 @@ type Process interface {
 type OrderedGroup []Process
 
 func (procs OrderedGroup) Run(ctx context.Context) error {
-	var grp errgroup.Group
+	grp, ctx := errgroup.WithContext(ctx)
 	for _, p := range procs {
 		p := p
 		grp.Go(func() error { return p.Run(ctx) })
@@ -66,7 +66,7 @@ func (procs OrderedGroup) Shutdown(ctx context.Context) error {
 type ConcurrentGroup []Process
 
 func (procs ConcurrentGroup) Run(ctx context.Context) error {
-	var grp errgroup.Group
+	grp, ctx := errgroup.WithContext(ctx)
 	for _, p := range procs {
 		p := p
 		grp.Go(func() error { return p.Run(ctx) })
